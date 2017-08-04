@@ -5,12 +5,16 @@ echo "127.0.0.1 vagrant_test1.domainname.com  vagrant_test1  localhost" | sudo t
 echo "::1       vagrant_test1.domainname.com  vagrant_test1  localhost" | sudo tee -a /etc/hosts
 echo "10.0.2.15 vagrant_test1.domainname.com  vagrant_test1  localhost" | sudo tee -a /etc/hosts
 
-sudo ex +"%s@DPkg@//DPkg" -cwq /etc/apt/apt.conf.d/70debconf
-sudo dpkg-reconfigure debconf -f noninteractive -p critical
+#sudo ex +"%s@DPkg@//DPkg" -cwq /etc/apt/apt.conf.d/70debconf
+#sudo dpkg-reconfigure debconf -f noninteractive -p critical
 
 # Fixing languages:
-sudo apt-get install -y language-pack-en-base
-sudo LC_ALL=en_US.UTF-8 add-apt-repository ppa:ondrej/php
+#sudo apt-get install -y language-pack-en-base
+#sudo LC_ALL=en_US.UTF-8 add-apt-repository ppa:ondrej/php
+
+# Setting for the new UTF-8 terminal support in Lion
+export LC_CTYPE=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
 
 # Update packages:
 apt-get update
@@ -18,184 +22,77 @@ apt-get update
 # Install nmap:
 sudo apt-get install -y nmap
 
+# Install some deps, lessc and less-plugin-clean-css, and wkhtmltopdf
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends ca-certificates
+sudo apt-get install -y --no-install-recommends curl
+sudo apt-get install -y --no-install-recommends node-less
+sudo apt-get install -y --no-install-recommends python-gevent
+sudo apt-get install -y --no-install-recommends python-pip
+sudo apt-get install -y --no-install-recommends python-renderpm
+sudo apt-get install -y --no-install-recommends python-support
+# TODO: sudo apt-get install -y --no-install-recommends python-watchdog
+            
+curl -o wkhtmltox.deb -SL http://nightly.odoo.com/extra/wkhtmltox-0.12.1.2_linux-jessie-amd64.deb
+echo '40e8b906de658a2221b15e4e8cd82565a47d7ee8 wkhtmltox.deb' | sha1sum -c -
+sudo dpkg --force-depends -i wkhtmltox.deb
+sudo apt-get -y install -f --no-install-recommends
+sudo apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false -o APT::AutoRemove::SuggestsImportant=false npm
+sudo rm -rf /var/lib/apt/lists/* wkhtmltox.deb
+sudo pip install psycogreen==1.0
 
+# Install Odoo:
+export ODOO_VERSION=10.0
+export ODOO_RELEASE=20170207
+curl -o odoo.deb -SL http://nightly.odoo.com/${ODOO_VERSION}/nightly/deb/odoo_${ODOO_VERSION}.${ODOO_RELEASE}_all.deb
+echo '5d2fb0cc03fa0795a7b2186bb341caa74d372e82 odoo.deb' | sha1sum -c -
+sudo dpkg --force-depends -i odoo.deb
+sudo apt-get update
+sudo apt-get -y install -f --no-install-recommends
+sudo rm -rf /var/lib/apt/lists/* odoo.deb
 
+# Entrypoint script and Odoo configuration file:
+curl -LJO https://raw.githubusercontent.com/odoo/docker/master/10.0/entrypoint.sh
+curl -LJO https://raw.githubusercontent.com/odoo/docker/master/10.0/odoo.conf
+sudo cp ./entrypoint.sh /
+sudo cp ./odoo.conf /etc/odoo/
+sudo chown odoo /etc/odoo/odoo.conf
 
+# Set the default config file
+export ODOO_RC=/etc/odoo/odoo.conf
 
+# sudo chmod 755 /entrypoint.sh
+# sudo ODOO_RC=/etc/odoo/odoo.conf /entrypoint.sh
 
+# set the postgres database host, port, user and password according to the environment
+# and pass them as arguments to the odoo process if not present in the config file
 
+# Install postgresql:
+sudo apt-get update
+sudo apt-get -y install postgresql
+sudo apt-get -y install postgresql-contrib
 
+# Create the user to access the db. (vagrant sample)
+sudo -u postgres psql -c "CREATE USER vagrant WITH SUPERUSER CREATEDB ENCRYPTED PASSWORD 'vagrant'"
 
+# generate the locales
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
 
+# drop and recreate the default cluster
+sudo pg_dropcluster --stop 9.3 main
+sudo pg_createcluster --start -e UTF-8 9.3 main
 
+# recreate our database user
+sudo -u postgres psql -c "CREATE USER vagrant WITH SUPERUSER CREATEDB ENCRYPTED PASSWORD 'vagrant'"
+sudo -u postgres psql -c "CREATE USER odoo WITH SUPERUSER CREATEDB ENCRYPTED PASSWORD 'odoo'"
+#   pg_createcluster 9.3 main --start
 
+# Restar de DB
+sudo /etc/init.d/postgresql restart
 
+# sudo service odoo restart
+# sudo systemctl enable odoo
+# sudo systemctl start odoo
 
-
-
-
-
-
-
-
-
-
-
-# Install MySQL:
-echo "mysql-server-5.5 mysql-server/root_password password root" | debconf-set-selections
-echo "mysql-server-5.5 mysql-server/root_password_again password root" | debconf-set-selections
-sudo apt-get -y install mysql-server-5.5
-
-# Apache install:
-apt-get install -y apache2
-#apt-get install -y apache2 > null 2>&1
-if ! [ -L /var/www ]; then
-  rm -rf /var/www
-  ln -fs /vagrant /var/www
-fi
-
-# Installing PHP 7:
-# sudo apt-get install -y php
-
-# Installing PHP 7.1 and some extra libraries:
-sudo apt-get install -y php7.1
-sudo apt-get install -y php7.1-xml 
-sudo apt-get install -y php7.1-bz2
-sudo apt-get install -y php7.1-dev
-sudo apt-get install -y php7.1-sqlite3
-sudo apt-get install -y php7.1-curl
-sudo apt-get install -y php7.1-intl
-sudo apt-get install -y php7.1-gd
-sudo apt-get install -y php7.1-mbstring
-sudo apt-get install -y php7.1-zip
-sudo apt-get install -y php7.1-mysql
-sudo apt-get install -y php7.1-bcmath
-sudo apt-get install -y php7.1-xdebug
-sudo apt-get install -y php7.1-apc
-
-# Install PHP FANN:
-sudo apt-get install -y libfann*
-
-cd /tmp/
-wget http://pecl.php.net/get/fann
-mkdir fann-latest
-tar xvfz fann -C /tmp/fann-latest --strip-components=1
-cd /tmp/fann-latest/
-export LANGUAGE=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
-phpize
-./configure
-make
-sudo cp -R /tmp/fann-latest/modules/* /usr/lib/php/20160303/
-sudo sh -c "echo 'extension=fann.so' > /etc/php/7.1/mods-available/fann.ini"
-sudo phpenmod fann
-
-sudo ln -s /etc/php/7.1/mods-available/fann.ini /etc/php/7.1/apache2/conf.d/30-fann.ini
-sudo service apache2 restart
-
-# Check loaded PHP modules:
-echo "Loaded PHP extensions:"
-php -m
-
-# Add DNS to /etc/resolv.conf
-echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
-echo "nameserver 8.8.4.4" | sudo tee -a /etc/resolv.conf
-
-# Install "Symfony Installer":
-sudo mkdir -p /usr/local/bin
-sudo curl -LsS https://symfony.com/installer -o /usr/local/bin/symfony
-sudo chmod a+x /usr/local/bin/symfony
-
-# Install composer:
-cd /tmp/
-curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
-
-# Install git:
-sudo apt-get install -y git
-
-# Install npm and node:
-sudo apt-get install -y npm
-sudo apt-get install -y node
-sudo apt-get install -y nodejs-legacy
-sudo npm install -g bower
-
-# Install "Symfony demo application":
-sudo -H -u vagrant bash -c 'cd /home/vagrant/ && php /usr/local/bin/symfony demo'
-sudo chown -R www-data:vagrant /home/vagrant/symfony_demo
-sudo chmod -R 775 /home/vagrant/symfony_demo
-sudo -H -u vagrant bash -c 'cd /home/vagrant/symfony_demo && php bin/console cache:clear --env=prod && php bin/console cache:clear --env=dev'
-sudo mkdir /home/vagrant/symfony_demo/logs
-sudo chown -R www-data:vagrant /home/vagrant/symfony_demo
-sudo chmod -R 775 /home/vagrant/symfony_demo
-sudo -H -u vagrant bash -c 'cd /home/vagrant/symfony_demo && php bin/console security:check'
-echo "<VirtualHost *:80>
-     ServerAdmin eligijus.stugys@gmail.com
-     ServerName symfony.demo.vagrant.test1.dev
-     ServerAlias www.symfony.demo.vagrant.test1.dev
-
-     DocumentRoot /home/vagrant/symfony_demo/web
-     <Directory /home/vagrant/symfony_demo/web>
-          AllowOverride All
-          Require all granted
-     </Directory>
-
-     ErrorLog /home/vagrant/symfony_demo/logs/error.log
-     CustomLog /home/vagrant/symfony_demo/logs/access.log combined
-</VirtualHost>
-" | sudo tee /etc/apache2/sites-available/symfony.demo.vagrant.test1.dev.conf
-sudo a2ensite symfony.demo.vagrant.test1.dev.conf
-sudo service apache2 stop
-sudo service apache2 start
-mkdir /home/vagrant/symfony_demo/var/data
-sudo -H -u vagrant bash -c 'cd /home/vagrant/symfony_demo && php bin/console doctrine:schema:update --force && php bin/console doctrine:fixtures:load'
-sudo chown -R www-data:vagrant /home/vagrant/symfony_demo
-sudo chmod -R 775 /home/vagrant/symfony_demo
-
-# Install docker:
-sudo apt install -y docker.io
-
-# Install GO:
-sudo apt install -y golang-go
-export GOPATH=~/go
-echo "" | tee -a ~/.bashrc
-echo "# GO envarment variables:" | tee -a ~/.bashrc
-echo "export GOPATH=~/go" | tee -a ~/.bashrc
-echo "export PATH=\$PATH:$GOPATH/bin" | tee -a ~/.bashrc
-# echo "" | tee -a /home/vagrant/.bashrc
-# echo "# GO envarment variables:" | tee -a /home/vagrant/.bashrc
-# echo "export GOPATH=~/go" | tee -a /home/vagrant/.bashrc
-# echo "export PATH=\$PATH:$GOPATH/bin" | tee -a /home/vagrant/.bashrc
-
-# Install MailHog:
-cd ~/
-wget https://github.com/mailhog/MailHog/releases/download/v0.2.1/MailHog_linux_amd64
-sudo mv MailHog_linux_amd64 /usr/bin/mailhog
-go get github.com/mailhog/mhsendmail
-sudo ln -s ~/go/bin/mhsendmail /usr/bin/mhsendmail
-sudo ln -s ~/go/bin/mhsendmail /usr/bin/sendmail
-sudo ln -s ~/go/bin/mhsendmail /usr/bin/mail
-echo "date.timezone = Europe/Vilnius" | sudo tee -a /etc/php/7.1/cli/php.ini
-echo "date.timezone = Europe/Vilnius" | sudo tee -a /etc/php/7.1/apache2/php.ini
-echo "sendmail_path = /usr/bin/mhsendmail" | sudo tee -a /etc/php/7.1/cli/php.ini
-echo "sendmail_path = /usr/bin/mhsendmail" | sudo tee -a /etc/php/7.1/apache2/php.ini
-sudo service apache2 stop
-sudo service apache2 start
-docker run -d -p 1025:1025 -p 8025:8025 mailhog/mailhog
-sudo tee /etc/init/mailhog.conf <<EOL
-description "Mailhog"
-start on runlevel [2345]
-stop on runlevel [!2345]
-respawn
-pre-start script
-    docker run -d -p 1025:1025 -p 8025:8025 mailhog/mailhog 1>/dev/null 2>&1
-end script
-EOL
-
-# Install RabbitMQ:
-sudo apt-get install rabbitmq-server -y
-sudo rabbitmq-plugins enable rabbitmq_web_stomp
-sudo rabbitmq-plugins enable mochiweb
-sudo rabbitmq-plugins enable rabbitmq_management
-sudo rabbitmq-plugins enable rabbitmq_web_stomp_examples
-sudo service rabbitmq-server restart
 
